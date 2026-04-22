@@ -1,46 +1,53 @@
 # Crisis Dispatch System (Hackathon Prototype)
 
-**Note from Pranit:**  
-Bhai itna hee kar paaya kuch college ka assignment bhi karna tha isliye zyaada nahi hua chutti li hai toh din mei poora yahi karunga aur aage ka bhi bnaunga
+**Note from Pranit:**
+The project started as a basic grid-based simulation and has now been upgraded to a real map-based system. There are still several features left to build, but the core system is now significantly improved and functional.
 
 ---
 
 ## Current Status
 
-This project is currently a partially complete but fully functional prototype.
+This project has evolved from a grid-based simulation into a real-time map-based emergency dispatch prototype.
 
-The core system has been implemented and is working:
-- Incident creation (SOS system)
-- Real-time grid simulation
-- Automatic responder assignment
-- Responder movement and resolution
+### What is Working:
 
-However, the system is not fully complete yet. Several planned features and refinements are still pending and will be developed further.
+* SOS-based emergency triggering (Fire / Medical / Crime)
+* Real-time GPS location detection
+* Live map visualization using Leaflet and OpenStreetMap
+* Automatic responder assignment based on proximity
+* Smooth responder movement toward incidents
+* Live incident tracking on map
+* Responder status tracking (available / busy)
 
-In progress / to be added:
-- Multi-dispatcher role system
-- Service-specific filtered views
-- Improved UI and visualization
-- Better prioritization logic
-
----
-
-## Features
-
-- SOS-based incident creation
-- Real-time grid-based simulation
-- Automatic responder assignment
-- Dynamic movement of responders
-- Priority-based emergencies (A1, A2, etc.)
-- Multi-service dispatch concept
+The system now behaves like a simplified real-world dispatch system.
 
 ---
 
 ## Concept
 
-This system simulates how modern emergency services can be optimized using intelligent dispatching.
+This system simulates how modern emergency services can be optimized using:
 
-Each incident can involve multiple services (fire, medical, police), and responders are automatically assigned based on proximity and availability.
+* Real-time location tracking
+* Intelligent nearest-responder allocation
+* Dynamic incident resolution
+
+Each incident:
+
+* Is created via SOS
+* Gets assigned to the nearest available responder
+* Is tracked live until resolution
+
+---
+
+## Features
+
+* One-tap SOS system
+* GPS-based incident location
+* Real-time interactive map
+* Automatic responder dispatch
+* Live movement simulation
+* Nearest responder selection
+* Clean UI
 
 ---
 
@@ -48,54 +55,83 @@ Each incident can involve multiple services (fire, medical, police), and respond
 
 ### 1. Clone the repository
 
+```id="a91v2d"
 git clone https://github.com/gl1sten/crisis-dispatch.git
-
 cd crisis-dispatch
-
----
+```
 
 ### 2. Install dependencies
 
+```id="7p1xmf"
 pip install -r requirements.txt
-
----
+```
 
 ### 3. Run the app
 
+```id="v5u3gh"
 python app.py
-
----
+```
 
 ### 4. Open in browser
 
-The app will automatically open in your browser at:
-
+```id="k3zq8s"
 http://127.0.0.1:5000
+```
 
 ---
 
 ## How to Use
 
-- Click buttons to simulate emergencies  
-- Red = Incident  
-- Blue = Available responder  
-- Purple = Busy responder  
+1. Allow location access in your browser
+2. Click any emergency button:
 
-Responders automatically move toward incidents and resolve them.
+   * Fire
+   * Medical
+   * Crime
+
+### Map Legend:
+
+* Red: Incident
+* Blue: Available responder
+* Purple: Busy responder
+
+Responders will automatically:
+
+* Get assigned
+* Move toward the incident
+* Resolve it
+
+---
+
+## Limitations
+
+* Uses simulated responders (not connected to real emergency services)
+* No integration with official APIs
+* Distance calculation is simplified (not road-based)
+* No database (data resets on restart)
 
 ---
 
 ## Future Scope
 
-- Real-time maps integration  
-- AI-based priority optimization  
-- Multi-dispatcher system  
-- Live communication between services  
+* Route-based movement using real roads
+* ETA calculation
+* Heatmap for crisis-prone areas
+* Multi-dispatcher system
+* Real-time communication between services
+* AI-based prioritization
+* Mobile application version
 
 ---
 
 ## Team
 
-Ajitesh Rajput  
-Ananya Soni  
+Ajitesh Rajput
+Ananya Soni
 Pranit Arora
+
+---
+
+## Vision
+
+To build a scalable emergency response system that reduces response time and improves coordination using real-time data and intelligent dispatching.
