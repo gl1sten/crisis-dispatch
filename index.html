@@ -2,8 +2,6 @@
 <html>
 <head>
   <title>Crisis Dispatch</title>
-
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
   <style>
@@ -21,130 +19,259 @@
       border-radius: 10px;
     }
 
+    #etaBox {
+      margin: 10px;
+      font-size: 16px;
+      color: #00ffcc;
+    }
+
     button {
       padding: 12px 20px;
       margin: 10px;
-      font-size: 16px;
-      border: none;
       border-radius: 8px;
+      border: none;
       cursor: pointer;
     }
 
-    .fire { background: red; color: white; }
-    .medical { background: green; color: white; }
-    .crime { background: blue; color: white; }
-
-    #status {
-      margin: 10px;
-      font-size: 18px;
-    }
+    .fire { background: red; }
+    .medical { background: green; }
+    .crime { background: blue; }
   </style>
 </head>
 
 <body>
 
 <h1>🚨 Crisis Dispatch</h1>
+<div id="etaBox">Live ETA: --</div>
 
-<p id="status">📍 Getting your location...</p>
-
-<button id="fireBtn" class="fire" onclick="sendSOS('fire')" disabled>🔥 Fire</button>
-<button id="medicalBtn" class="medical" onclick="sendSOS('medical')" disabled>🚑 Medical</button>
-<button id="crimeBtn" class="crime" onclick="sendSOS('crime')" disabled>🚓 Crime</button>
+<button onclick="sendSOS('fire')" class="fire">🔥 Fire</button>
+<button onclick="sendSOS('medical')" class="medical">🚑 Medical</button>
+<button onclick="sendSOS('crime')" class="crime">🚓 Crime</button>
 
 <div id="map"></div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-let map;
-let userPos;
+let map, userPos, userMarker;
+
 let responderMarkers = {};
+let baseMarkers = {};
 let incidentMarkers = {};
 
-// Initialize map
-function initMap(lat, lng) {
-  map = L.map('map').setView([lat, lng], 13);
+let paths = {};
+let steps = {};
+let totalSteps = {};
+let routeLines = {};
+let fadedLines = {};
+let states = {};
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
+let etaDisplay = {};
 
-  // user marker
-  L.marker([lat, lng]).addTo(map).bindPopup("You").openPopup();
+// ICONS
+const icons = {
+  incident: L.icon({
+    iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
+    iconSize: [45,45]
+  }),
+  free: L.icon({
+    iconUrl: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+    iconSize: [35,35]
+  }),
+  busy: L.icon({
+    iconUrl: "https://maps.google.com/mapfiles/ms/icons/purple-dot.png",
+    iconSize: [35,35]
+  })
+};
+
+// INIT MAP
+function initMap(lat,lng){
+  map = L.map('map').setView([lat,lng],15);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  // ✅ USER LOCATION FIX
+  userMarker = L.circleMarker([lat,lng], {
+    radius: 8,
+    color: "cyan"
+  }).addTo(map).bindPopup("📍 You");
 }
 
-// Get user location
+// LOCATION
 navigator.geolocation.getCurrentPosition(
-  pos => {
-    userPos = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude
-    };
-
-    initMap(userPos.lat, userPos.lng);
-
-    document.getElementById("status").innerText = "✅ Location ready";
-
-    // enable buttons
-    document.getElementById("fireBtn").disabled = false;
-    document.getElementById("medicalBtn").disabled = false;
-    document.getElementById("crimeBtn").disabled = false;
+  pos=>{
+    userPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    start();
   },
-  err => {
-    document.getElementById("status").innerText = "❌ Location denied";
-    alert("Please allow location");
-    console.error(err);
+  ()=>{
+    userPos={lat:28.6139,lng:77.2090};
+    start();
   }
 );
 
-// Send SOS
-function sendSOS(type) {
-  fetch("/sos", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      type: type,
-      lat: userPos.lat,
-      lng: userPos.lng
+function start(){
+  initMap(userPos.lat,userPos.lng);
+  setInterval(update,1000);
+}
+
+// SOS
+function sendSOS(type){
+  fetch("/sos",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      type,
+      lat:userPos.lat+(Math.random()-0.5)*0.01,
+      lng:userPos.lng+(Math.random()-0.5)*0.01
     })
   });
 }
 
-// Update map
-async function update() {
-  const incidents = await fetch("/incidents").then(r => r.json());
-  const responders = await fetch("/responders").then(r => r.json());
-
-  // incidents (red)
-  incidents.forEach(i => {
-    if (!incidentMarkers[i.id]) {
-      incidentMarkers[i.id] = L.marker([i.lat, i.lng], {
-        icon: L.icon({
-          iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
-          iconSize: [32, 32]
-        })
-      }).addTo(map);
-    }
-  });
-
-  // responders
-  responders.forEach(r => {
-    const iconUrl = r.busy
-      ? "https://maps.google.com/mapfiles/ms/icons/purple-dot.png"
-      : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png";
-
-    if (!responderMarkers[r.id]) {
-      responderMarkers[r.id] = L.marker([r.lat, r.lng], {
-        icon: L.icon({ iconUrl: iconUrl, iconSize: [32, 32] })
-      }).addTo(map);
-    } else {
-      responderMarkers[r.id].setLatLng([r.lat, r.lng]);
-    }
-  });
+// ROUTE
+async function getRoute(start,end){
+  try{
+    let res=await fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`);
+    let data=await res.json();
+    return data.routes[0];
+  }catch{return null;}
 }
 
-setInterval(update, 1000);
+// MAIN LOOP
+async function update(){
+
+  let incidents=await fetch("/incidents").then(r=>r.json());
+  let responders=await fetch("/responders").then(r=>r.json());
+
+  // INCIDENTS (with priority)
+  incidents.forEach(i=>{
+    if(!incidentMarkers[i.id]){
+      incidentMarkers[i.id]=L.marker([i.lat,i.lng],{icon:icons.incident})
+      .addTo(map)
+      .bindPopup(`🚨 ${i.type.toUpperCase()} | Priority: ${i.priority}`);
+    }
+  });
+
+  // REMOVE OLD
+  Object.keys(incidentMarkers).forEach(id=>{
+    if(!incidents.find(i=>i.id==id)){
+      map.removeLayer(incidentMarkers[id]);
+      delete incidentMarkers[id];
+    }
+  });
+
+  // RESPONDERS
+  for(let r of responders){
+
+    // ⚫ SMALL GREY BASE DOT
+    if(!baseMarkers[r.id]){
+      baseMarkers[r.id]=L.circleMarker(
+        [r.base_lat,r.base_lng],
+        {radius:4,color:"grey"}
+      ).addTo(map);
+    }
+
+    if(r.busy || states[r.id]==="return"){
+
+      let target;
+      let color="cyan";
+
+      if(r.busy){
+        target=incidents.find(x=>x.responder_id===r.id);
+        states[r.id]="incident";
+      }else{
+        target={lat:r.base_lat,lng:r.base_lng};
+        states[r.id]="return";
+        color="green";
+      }
+
+      if(!target) continue;
+
+      if(!paths[r.id]){
+        let route=await getRoute(
+          {lat:r.lat,lng:r.lng},
+          {lat:target.lat,lng:target.lng}
+        );
+        if(!route) continue;
+
+        let coords=route.geometry.coordinates.map(c=>[c[1],c[0]]);
+
+        paths[r.id]=coords;
+        steps[r.id]=0;
+        totalSteps[r.id]=coords.length;
+
+        routeLines[r.id]=L.polyline(coords,{color}).addTo(map);
+        fadedLines[r.id]=L.polyline([],{color:"grey"}).addTo(map);
+      }
+
+      let step=steps[r.id];
+      let path=paths[r.id];
+
+      if(step<path.length){
+
+        if(!responderMarkers[r.id]){
+          responderMarkers[r.id]=L.marker(path[step],{icon:icons.busy}).addTo(map);
+        }else{
+          responderMarkers[r.id].setLatLng(path[step]);
+          responderMarkers[r.id].setIcon(icons.busy);
+        }
+
+        // 🔥 SCALED ETA (KEY FIX)
+        let progress = step / totalSteps[r.id];
+        let remaining = Math.max(0, (1 - progress) * 100); // scaled %
+
+        let mins = Math.floor(remaining / 5); // scaling factor
+        let secs = Math.floor((remaining % 5) * 12);
+
+        etaDisplay[r.id]=`${mins}m ${secs}s`;
+
+        fadedLines[r.id].addLatLng(path[step]);
+
+        steps[r.id]++;
+      }
+
+      if(step>=path.length-1){
+
+        if(states[r.id]==="incident"){
+          await fetch("/resolve",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({id:target.id})
+          });
+
+          delete paths[r.id];
+          delete steps[r.id];
+
+        }else{
+          states[r.id]=null;
+
+          map.removeLayer(routeLines[r.id]);
+          map.removeLayer(fadedLines[r.id]);
+
+          delete paths[r.id];
+          delete steps[r.id];
+        }
+
+        delete etaDisplay[r.id];
+      }
+
+    } else {
+
+      if(!responderMarkers[r.id]){
+        responderMarkers[r.id]=L.marker([r.lat,r.lng],{icon:icons.free}).addTo(map);
+      }else{
+        responderMarkers[r.id].setLatLng([r.lat,r.lng]);
+        responderMarkers[r.id].setIcon(icons.free);
+      }
+    }
+  }
+
+  // ETA PANEL
+  let html="<b>Live ETA:</b><br>";
+  for(let id in etaDisplay){
+    html+=`🚑 Responder ${id}: ${etaDisplay[id]}<br>`;
+  }
+  document.getElementById("etaBox").innerHTML=html;
+}
 </script>
 
 </body>
