@@ -52,6 +52,9 @@ def distance(lat1, lng1, lat2, lng2):
 @app.route("/responders")
 def get_responders():
     return jsonify(responders)
+@app.route("/responder")
+def responder_page():
+    return send_from_directory(".", "responder.html")
 
 # -----------------------------
 # SOS (Create incident + spawn responders)
@@ -121,39 +124,41 @@ def sos():
 # -----------------------------
 # Assign responders (WITH 5KM LIMIT)
 # -----------------------------
+# @app.route("/incidents")
+# def get_incidents():
+
+#     incidents.sort(key=lambda x: x["priority"])
+
+#     for incident in incidents:
+#         # if not incident["assigned"]:
+
+#         #     nearest = None
+#         #     min_dist = float("inf")
+
+#         #     for r in responders:
+#         #         if not r["busy"]:
+#         #             d = distance(r["lat"], r["lng"], incident["lat"], incident["lng"])
+
+#         #             if d < min_dist and d <= MAX_RADIUS:
+#         #                 min_dist = d
+#         #                 nearest = r
+
+#             if nearest:
+#                 nearest["busy"] = True
+#                 incident["assigned"] = True
+#                 incident["responder_id"] = nearest["id"]
+#                 incident["status"] = "assigned"
+#                 incident["distance_km"] = round(min_dist, 2)
+
+#                 print(f"Responder {nearest['id']} assigned ({incident['distance_km']} km)")
+
+#             else:
+#                 incident["status"] = "no_responder_available"
+
+#     return jsonify(incidents)
 @app.route("/incidents")
 def get_incidents():
-
-    incidents.sort(key=lambda x: x["priority"])
-
-    for incident in incidents:
-        if not incident["assigned"]:
-
-            nearest = None
-            min_dist = float("inf")
-
-            for r in responders:
-                if not r["busy"]:
-                    d = distance(r["lat"], r["lng"], incident["lat"], incident["lng"])
-
-                    if d < min_dist and d <= MAX_RADIUS:
-                        min_dist = d
-                        nearest = r
-
-            if nearest:
-                nearest["busy"] = True
-                incident["assigned"] = True
-                incident["responder_id"] = nearest["id"]
-                incident["status"] = "assigned"
-                incident["distance_km"] = round(min_dist, 2)
-
-                print(f"Responder {nearest['id']} assigned ({incident['distance_km']} km)")
-
-            else:
-                incident["status"] = "no_responder_available"
-
     return jsonify(incidents)
-
 # -----------------------------
 # Resolve incident
 # -----------------------------
@@ -179,7 +184,29 @@ def resolve():
             break
 
     return jsonify({"status": "resolved"})
+@app.route("/respond", methods=["POST"])
+def respond():
+    data = request.json
+    incident_id = data["incident_id"]
+    responder_id = data["responder_id"]
+    action = data["action"]
 
+    for incident in incidents:
+        if incident["id"] == incident_id:
+
+            if action == "accept":
+                incident["assigned"] = True
+                incident["responder_id"] = responder_id
+                incident["status"] = "assigned"
+
+                for r in responders:
+                    if r["id"] == responder_id:
+                        r["busy"] = True
+
+            elif action == "deny":
+                incident["status"] = "denied"
+
+            return jsonify({"msg": "done"})
 # -----------------------------
 # Run
 # -----------------------------
