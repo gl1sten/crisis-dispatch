@@ -1,14 +1,14 @@
 from flask import Flask, request, jsonify, send_from_directory
-import random
-import webbrowser
+import math
 
 app = Flask(__name__)
 
 incidents = []
 
+# Example responders (Delhi region)
 responders = [
-    {"id": 1, "x": 0, "y": 0, "busy": False},
-    {"id": 2, "x": 9, "y": 9, "busy": False}
+    {"id": 1, "lat": 28.6139, "lng": 77.2090, "busy": False},
+    {"id": 2, "lat": 28.7041, "lng": 77.1025, "busy": False}
 ]
 
 # Serve frontend
@@ -16,81 +16,71 @@ responders = [
 def serve():
     return send_from_directory(".", "index.html")
 
+# Distance function
+def distance(lat1, lng1, lat2, lng2):
+    return math.sqrt((lat1-lat2)**2 + (lng1-lng2)**2)
+
 # Get responders
-@app.route("/responders", methods=["GET"])
+@app.route("/responders")
 def get_responders():
     return jsonify(responders)
 
-# SOS route (create incident)
+# SOS endpoint
 @app.route("/sos", methods=["POST"])
 def sos():
     data = request.json
 
-    priority_map = {
-        "fire": "A1",
-        "medical": "A2",
-        "crime": "B1"
-    }
-
     incident = {
         "id": len(incidents) + 1,
-        "type": data.get("type", "unknown"),
-        "x": random.randint(0, 9),
-        "y": random.randint(0, 9),
+        "type": data["type"],
+        "lat": data["lat"],
+        "lng": data["lng"],
         "assigned": False,
-        "priority": priority_map.get(data.get("type"), "C1")
+        "status": "waiting"
     }
 
     incidents.append(incident)
-
     return jsonify(incident)
 
-# Core logic: assign + move responders
-@app.route("/incidents", methods=["GET"])
+# Main logic
+@app.route("/incidents")
 def get_incidents():
 
-    # Assign responders
+    # Assign nearest responder
     for incident in incidents:
-        if not incident.get("assigned"):
+        if not incident["assigned"]:
 
             nearest = None
-            min_dist = 999
+            min_dist = float("inf")
 
             for r in responders:
                 if not r["busy"]:
-                    dist = abs(r["x"] - incident["x"]) + abs(r["y"] - incident["y"])
-                    if dist < min_dist:
-                        min_dist = dist
+                    d = distance(r["lat"], r["lng"], incident["lat"], incident["lng"])
+                    if d < min_dist:
+                        min_dist = d
                         nearest = r
 
             if nearest:
                 nearest["busy"] = True
                 incident["assigned"] = True
                 incident["responder_id"] = nearest["id"]
+                incident["status"] = "assigned"
 
-    # Move responders
+    # Move responders smoothly
     for r in responders:
-        for incident in incidents[:]:  # safe removal
+        for incident in incidents[:]:
             if incident.get("responder_id") == r["id"]:
 
-                # move step-by-step
-                if r["x"] < incident["x"]:
-                    r["x"] += 1
-                elif r["x"] > incident["x"]:
-                    r["x"] -= 1
+                r["lat"] += (incident["lat"] - r["lat"]) * 0.05
+                r["lng"] += (incident["lng"] - r["lng"]) * 0.05
 
-                if r["y"] < incident["y"]:
-                    r["y"] += 1
-                elif r["y"] > incident["y"]:
-                    r["y"] -= 1
-
-                # reached destination
-                if r["x"] == incident["x"] and r["y"] == incident["y"]:
+                # If reached
+                if distance(r["lat"], r["lng"], incident["lat"], incident["lng"]) < 0.0005:
                     r["busy"] = False
                     incidents.remove(incident)
 
     return jsonify(incidents)
 
+
 if __name__ == "__main__":
-    webbrowser.open("http://127.0.0.1:5000")
     app.run(debug=True)
