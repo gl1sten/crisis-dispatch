@@ -6,13 +6,19 @@ import random
 app = Flask(__name__)
 
 incidents = []
+responders = []
 
-# Example responder locations (Delhi)
-responders = [
-    {"id": 1, "lat": 28.6139, "lng": 77.2090, "busy": False},
-    {"id": 2, "lat": 28.6145, "lng": 77.2100, "busy": False},
-    {"id": 3, "lat": 28.6150, "lng": 77.2080, "busy": False}
-]
+MAX_RADIUS = 5  # km
+
+# -----------------------------
+# Generate location near user
+# -----------------------------
+def random_nearby(lat, lng, radius_km=5):
+    radius_deg = radius_km / 111  # approx conversion
+    return {
+        "lat": lat + random.uniform(-radius_deg, radius_deg),
+        "lng": lng + random.uniform(-radius_deg, radius_deg)
+    }
 
 # -----------------------------
 # Serve frontend
@@ -21,32 +27,34 @@ responders = [
 def serve():
     return send_from_directory(".", "index.html")
 
+# -----------------------------
+# Distance (Haversine)
+# -----------------------------
+def distance(lat1, lng1, lat2, lng2):
+    R = 6371  # Earth radius in km
 
-def random_location():
-    # Delhi bounding box (you can tweak)
-    return {
-        "lat": 28.50 + random.random() * 0.2,
-        "lng": 77.10 + random.random() * 0.2
-    }
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
 
+    a = (
+        math.sin(dlat / 2) ** 2 +
+        math.cos(math.radians(lat1)) *
+        math.cos(math.radians(lat2)) *
+        math.sin(dlng / 2) ** 2
+    )
+
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
 # -----------------------------
 # Get responders
 # -----------------------------
-@app.route("/responders", methods=["GET"])
+@app.route("/responders")
 def get_responders():
     return jsonify(responders)
 
-
 # -----------------------------
-# Distance function
-# -----------------------------
-def distance(lat1, lng1, lat2, lng2):
-    return math.sqrt((lat1 - lat2)**2 + (lng1 - lng2)**2)
-
-
-# -----------------------------
-# SOS route
+# SOS (Create incident + spawn responders)
 # -----------------------------
 @app.route("/sos", methods=["POST"])
 def sos():
@@ -58,54 +66,97 @@ def sos():
         "crime": "B1"
     }
 
+    # CREATE INCIDENT
     incident = {
         "id": len(incidents) + 1,
-        "type": data.get("type", "unknown"),
+        "type": data.get("type"),
         "lat": data.get("lat"),
         "lng": data.get("lng"),
         "assigned": False,
-        "priority": priority_map.get(data.get("type"), "C1")
+        "priority": priority_map.get(data.get("type"), "C1"),
+        "responder_id": None,
+        "status": "waiting",
+        "distance_km": None
     }
 
     incidents.append(incident)
+
+    # -----------------------------
+    # SPAWN / RESPAWN RESPONDERS
+    # -----------------------------
+    global responders
+
+    if len(responders) == 0:
+        need_spawn = True
+    else:
+        # check avg distance from responders to new incident
+        avg_dist = sum(
+            distance(r["lat"], r["lng"], data["lat"], data["lng"])
+            for r in responders
+        ) / len(responders)
+
+        need_spawn = avg_dist > 5
+
+    if need_spawn:
+        responders.clear()
+
+        for i in range(5):
+            loc = random_nearby(data["lat"], data["lng"])
+
+            responders.append({
+                "id": i + 1,
+                "lat": loc["lat"],
+                "lng": loc["lng"],
+                "base_lat": loc["lat"],
+                "base_lng": loc["lng"],
+                "busy": False
+            })
+
+        print("Responders spawned near incident")
 
     print("New Incident:", incident)
 
     return jsonify(incident)
 
-
 # -----------------------------
-# Assign responders ONLY
+# Assign responders (WITH 5KM LIMIT)
 # -----------------------------
-@app.route("/incidents", methods=["GET"])
+@app.route("/incidents")
 def get_incidents():
 
+    incidents.sort(key=lambda x: x["priority"])
+
     for incident in incidents:
-        if not incident.get("assigned"):
+        if not incident["assigned"]:
 
             nearest = None
             min_dist = float("inf")
 
             for r in responders:
                 if not r["busy"]:
-                    dist = distance(
-                        r["lat"], r["lng"],
-                        incident["lat"], incident["lng"]
-                    )
+                    d = distance(r["lat"], r["lng"], incident["lat"], incident["lng"])
 
-                    if dist < min_dist:
-                        min_dist = dist
+                    if d < min_dist and d <= MAX_RADIUS:
+                        min_dist = d
                         nearest = r
 
             if nearest:
                 nearest["busy"] = True
                 incident["assigned"] = True
                 incident["responder_id"] = nearest["id"]
+                incident["status"] = "assigned"
+                incident["distance_km"] = round(min_dist, 2)
 
-                print(f"Responder {nearest['id']} assigned to Incident {incident['id']}")
+                print(f"Responder {nearest['id']} assigned ({incident['distance_km']} km)")
+
+            else:
+                incident["status"] = "no_responder_available"
 
     return jsonify(incidents)
 
+# -----------------------------
+# Resolve incident
+# -----------------------------
 @app.route("/resolve", methods=["POST"])
 def resolve():
     data = request.json
@@ -116,7 +167,6 @@ def resolve():
     for incident in incidents:
         if incident["id"] == incident_id:
 
-            # FREE THE RESPONDER 
             responder_id = incident.get("responder_id")
 
             for r in responders:
@@ -125,28 +175,13 @@ def resolve():
                     break
 
             incidents.remove(incident)
+            print(f"Incident {incident_id} resolved")
             break
 
     return jsonify({"status": "resolved"})
 
-
-responders = []
-
-for i in range(5):  # number of responders
-    loc = random_location()
-    responders.append({
-        "id": i+1,
-        "lat": loc["lat"],
-        "lng": loc["lng"],
-        "base_lat": loc["lat"],   # IMPORTANT
-        "base_lng": loc["lng"],
-        "busy": False
-    })
-
-
-
 # -----------------------------
-# Run app
+# Run
 # -----------------------------
 if __name__ == "__main__":
     webbrowser.open("http://127.0.0.1:5000")

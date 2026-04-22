@@ -1,276 +1,497 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Crisis Dispatch</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vector | Emergency Response Command</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
 
   <style>
-    body {
-      font-family: Arial;
-      text-align: center;
-      background: #111;
-      color: white;
+    :root {
+      --bg-deep: #05070a;
+      --sidebar-bg: rgba(13, 17, 23, 0.95);
+      --accent-red: #ff3b3b;
+      --accent-green: #00f294;
+      --accent-blue: #3b82f6;
+      --border-thin: rgba(255, 255, 255, 0.08);
+      --text-dim: #8b949e;
     }
 
-    #map {
-      height: 500px;
-      width: 90%;
-      margin: auto;
-      border-radius: 10px;
+    * { box-sizing: border-box; }
+
+    body, html {
+      margin: 0; padding: 0; height: 100%;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg-deep);
+      color: #ffffff;
+      overflow: hidden;
     }
 
-    #etaBox {
-      margin: 10px;
-      font-size: 16px;
-      color: #00ffcc;
+    .dashboard-container { 
+      display: flex; 
+      height: 100vh; 
+      width: 100vw; 
     }
 
-    button {
-      padding: 12px 20px;
-      margin: 10px;
+    /* --- SIDEBAR --- */
+    .sidebar {
+      width: 340px;
+      min-width: 340px;
+      background: var(--sidebar-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid var(--border-thin);
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      z-index: 1000; /* Above Leaflet */
+      box-shadow: 20px 0 50px rgba(0,0,0,0.3);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .logo-mark {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent-red), #8b0000);
       border-radius: 8px;
-      border: none;
-      cursor: pointer;
+      display: grid; place-items: center;
+      font-weight: 700; font-size: 18px;
     }
 
-    .fire { background: red; }
-    .medical { background: green; }
-    .crime { background: blue; }
+    .brand-text h1 { font-size: 18px; margin: 0; letter-spacing: -0.5px; }
+    .brand-text span { font-size: 10px; color: var(--accent-red); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+
+    /* --- TELEMETRY --- */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border-thin);
+      padding: 12px;
+      border-radius: 12px;
+    }
+
+    .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; display: block; }
+    .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #fff; }
+
+    /* --- BUTTONS --- */
+    .dispatch-header { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; display: block; font-weight: 600; text-transform: uppercase;}
+    
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
+      display: flex; justify-content: space-between; align-items: center;
+      color: white;
+      text-decoration: none;
+    }
+
+    .btn:active { transform: scale(0.98); }
+
+    .fire { background: rgba(255, 59, 59, 0.1); border-color: rgba(255, 59, 59, 0.2); color: #ff6b6b; }
+    .fire:hover { background: var(--accent-red); color: white; }
+
+    .medical { background: rgba(0, 242, 148, 0.1); border-color: rgba(0, 242, 148, 0.2); color: #4ade80; }
+    .medical:hover { background: var(--accent-green); color: #05070a; }
+
+    .crime { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .crime:hover { background: var(--accent-blue); color: white; }
+
+    /* --- ETA PANEL --- */
+    #etaBox {
+      margin-top: auto;
+      background: rgba(0,0,0,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px dashed var(--border-thin);
+    }
+
+    .eta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border-thin);
+    }
+
+    .eta-row:last-child { border-bottom: none; }
+    .unit-id { font-family: 'JetBrains Mono', monospace; color: var(--accent-blue); }
+    .time-rem { font-weight: 700; color: #fff; }
+
+    /* --- MAP --- */
+    #map { 
+      flex-grow: 1; 
+      height: 100vh; 
+      z-index: 1; 
+      background: #0b0d10;
+    }
+    
+    .map-overlay-tag {
+        position: absolute; top: 20px; right: 20px;
+        z-index: 1000; background: var(--sidebar-bg);
+        padding: 8px 16px; border-radius: 30px;
+        border: 1px solid var(--border-thin);
+        font-size: 11px; font-weight: 600;
+        display: flex; align-items: center; gap: 8px;
+        pointer-events: none;
+    }
+
+    .pulse {
+        width: 8px; height: 8px; background: var(--accent-green);
+        border-radius: 50%; box-shadow: 0 0 10px var(--accent-green);
+        animation: blink 1.5s infinite;
+    }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
   </style>
 </head>
 
 <body>
 
-<h1>🚨 Crisis Dispatch</h1>
-<div id="etaBox">Live ETA: --</div>
+<div class="dashboard-container">
+  <aside class="sidebar">
+    <div class="brand">
+        <div class="logo-mark">V</div>
+        <div class="brand-text">
+            <h1>VECTOR</h1>
+            <span>Command Center</span>
+        </div>
+    </div>
 
-<button onclick="sendSOS('fire')" class="fire">🔥 Fire</button>
-<button onclick="sendSOS('medical')" class="medical">🚑 Medical</button>
-<button onclick="sendSOS('crime')" class="crime">🚓 Crime</button>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">Active Units</span>
+            <div class="stat-value" id="nodeCount">0</div>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">System Ping</span>
+            <div class="stat-value">21ms</div>
+        </div>
+    </div>
+    
+    <span class="dispatch-header">Quick Response Protocol</span>
+    <nav class="dispatch-group">
+      <button onclick="sendSOS('fire')" class="btn fire">Unit: Fire / Rescue <span>→</span></button>
+      <button onclick="sendSOS('medical')" class="btn medical">Unit: EMS / Medical <span>→</span></button>
+      <button onclick="sendSOS('crime')" class="btn crime">Unit: Tactical / Police <span>→</span></button>
+    </nav>
 
-<div id="map"></div>
+    <div id="etaBox">
+      <span class="stat-label" style="margin-bottom:12px;">Deployment Telemetry</span>
+      <div id="etaList" style="font-size: 11px; color: var(--text-dim);">No active dispatches...</div>
+    </div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-thin);">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:30px; height:30px; border-radius:50%; background: linear-gradient(45deg, #111, #333);"></div>
+            <div>
+                <div style="font-size:12px; font-weight:600;">System Admin</div>
+                <div style="font-size:10px; color:var(--text-dim);">Sector 7G - HQ</div>
+            </div>
+        </div>
+    </div>
+  </aside>
+
+  <main id="map">
+    <div class="map-overlay-tag">
+        <div class="pulse"></div>
+        SYSTEM LIVE: <span id="clock">00:00:00</span>
+    </div>
+  </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-let map, userPos, userMarker;
+// UI Elements
+const clockEl = document.getElementById('clock');
+const nodeCountEl = document.getElementById('nodeCount');
+const etaListEl = document.getElementById('etaList');
 
+setInterval(() => {
+    clockEl.innerText = new Date().toLocaleTimeString();
+}, 1000);
+
+// App State
+let map, userPos, userMarker;
 let responderMarkers = {};
 let baseMarkers = {};
 let incidentMarkers = {};
-
 let paths = {};
 let steps = {};
 let totalSteps = {};
 let routeLines = {};
 let fadedLines = {};
 let states = {};
-
 let etaDisplay = {};
 
-// ICONS
+// Custom Markers
 const icons = {
-  incident: L.icon({
-    iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
-    iconSize: [45,45]
+  incident: L.divIcon({
+    className: 'v-marker',
+    html: `<div style="background:#ff3b3b; width:14px; height:14px; border-radius:50%; border:3px solid #fff; box-shadow: 0 0 20px #ff3b3b;"></div>`,
+    iconSize: [14, 14], iconAnchor: [7, 7]
   }),
-  free: L.icon({
-    iconUrl: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-    iconSize: [35,35]
+  free: L.divIcon({
+    className: 'v-marker',
+    html: `<div style="background:#00f294; width:10px; height:10px; border-radius:50%; border:2px solid #fff;"></div>`,
+    iconSize: [10, 10], iconAnchor: [5, 5]
   }),
-  busy: L.icon({
-    iconUrl: "https://maps.google.com/mapfiles/ms/icons/purple-dot.png",
-    iconSize: [35,35]
+  busy: L.divIcon({
+    className: 'v-marker',
+    html: `<div style="background:#3b82f6; width:10px; height:10px; border-radius:50%; border:2px solid #fff; box-shadow: 0 0 15px #3b82f6;"></div>`,
+    iconSize: [10, 10], iconAnchor: [5, 5]
   })
 };
 
-// INIT MAP
-function initMap(lat,lng){
-  map = L.map('map').setView([lat,lng],15);
+function initMap(lat, lng) {
+  // Fix: Explicitly ensure map fills the container
+  map = L.map('map', { 
+    zoomControl: false, 
+    attributionControl: false 
+  }).setView([lat, lng], 15);
+  
+  // High-Contrast Dark Tiles
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19
+  }).addTo(map);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // ✅ USER LOCATION FIX
-  userMarker = L.circleMarker([lat,lng], {
-    radius: 8,
-    color: "cyan"
-  }).addTo(map).bindPopup("📍 You");
+  userMarker = L.circleMarker([lat, lng], {
+    radius: 8, fillColor: "#fff", color: "#3b82f6", weight: 3, fillOpacity: 1
+  }).addTo(map).bindPopup("Current Position");
 }
 
-// LOCATION
 navigator.geolocation.getCurrentPosition(
-  pos=>{
-    userPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    start();
-  },
-  ()=>{
-    userPos={lat:28.6139,lng:77.2090};
-    start();
-  }
+  pos => { userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; start(); },
+  () => { userPos = { lat: 28.6139, lng: 77.2090 }; start(); }
 );
 
-function start(){
-  initMap(userPos.lat,userPos.lng);
-  setInterval(update,1000);
+function start() {
+  initMap(userPos.lat, userPos.lng);
+  setInterval(update, 1000);
 }
 
-// SOS
-function sendSOS(type){
-  fetch("/sos",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      type,
-      lat:userPos.lat+(Math.random()-0.5)*0.01,
-      lng:userPos.lng+(Math.random()-0.5)*0.01
-    })
+function sendSOS(type) {
+  fetch("/sos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type, lat: userPos.lat, lng: userPos.lng })
   });
 }
 
-// ROUTE
-async function getRoute(start,end){
-  try{
-    let res=await fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`);
-    let data=await res.json();
+async function getRoute(start, end) {
+  try {
+    let res = await fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`);
+    let data = await res.json();
     return data.routes[0];
-  }catch{return null;}
+  } catch { return null; }
 }
 
-// MAIN LOOP
-async function update(){
+async function update() {
+  const resInc = await fetch("/incidents").catch(() => null);
+  const resRes = await fetch("/responders").catch(() => null);
+  
+  if(!resInc || !resRes) return;
+  
+  let incidents = await resInc.json();
+  let responders = await resRes.json();
 
-  let incidents=await fetch("/incidents").then(r=>r.json());
-  let responders=await fetch("/responders").then(r=>r.json());
+  nodeCountEl.innerText = responders.length;
 
-  // INCIDENTS (with priority)
-  incidents.forEach(i=>{
-    if(!incidentMarkers[i.id]){
-      incidentMarkers[i.id]=L.marker([i.lat,i.lng],{icon:icons.incident})
-      .addTo(map)
-      .bindPopup(`🚨 ${i.type.toUpperCase()} | Priority: ${i.priority}`);
+  // Render Incidents
+  incidents.forEach(i => {
+    if (!incidentMarkers[i.id]) {
+      incidentMarkers[i.id] = L.marker([i.lat, i.lng], { icon: icons.incident }).addTo(map);
     }
   });
 
-  // REMOVE OLD
-  Object.keys(incidentMarkers).forEach(id=>{
-    if(!incidents.find(i=>i.id==id)){
+  // Cleanup Old Incidents
+  Object.keys(incidentMarkers).forEach(id => {
+    if (!incidents.find(i => i.id == id)) {
       map.removeLayer(incidentMarkers[id]);
       delete incidentMarkers[id];
     }
   });
 
-  // RESPONDERS
-  for(let r of responders){
+  // Responders Logic
+  // Responders Logic
+for (let r of responders) {
 
-    // ⚫ SMALL GREY BASE DOT
-    if(!baseMarkers[r.id]){
-      baseMarkers[r.id]=L.circleMarker(
-        [r.base_lat,r.base_lng],
-        {radius:4,color:"grey"}
-      ).addTo(map);
+  // base marker
+  if (!baseMarkers[r.id]) {
+    baseMarkers[r.id] = L.circleMarker(
+      [r.base_lat, r.base_lng],
+      { radius: 2, color: "#333" }
+    ).addTo(map);
+  }
+
+  // 🔥 IMPORTANT: check assignment properly
+  let assignedIncident = incidents.find(i => i.responder_id === r.id);
+
+  if (assignedIncident || states[r.id] === "return") {
+
+    let target;
+    let color = assignedIncident ? "#3b82f6" : "#00f294";
+
+    // 🔥 FIXED LOGIC
+    if (assignedIncident) {
+      target = assignedIncident;
+      states[r.id] = "incident";
+    } 
+    else if (states[r.id] === "return") {
+      target = { lat: r.base_lat, lng: r.base_lng };
+    } 
+    else {
+      continue; // 🚨 STOP unwanted movement
     }
 
-    if(r.busy || states[r.id]==="return"){
+    if (!target) continue;
 
-      let target;
-      let color="cyan";
+    // create path
+    if (!paths[r.id]) {
+      let route = await getRoute(
+        { lat: r.lat, lng: r.lng },
+        { lat: target.lat, lng: target.lng }
+      );
 
-      if(r.busy){
-        target=incidents.find(x=>x.responder_id===r.id);
-        states[r.id]="incident";
-      }else{
-        target={lat:r.base_lat,lng:r.base_lng};
-        states[r.id]="return";
-        color="green";
+      if (!route) continue;
+
+      let coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+
+      paths[r.id] = coords;
+      steps[r.id] = 0;
+      totalSteps[r.id] = coords.length;
+
+      routeLines[r.id] = L.polyline(coords, {
+        color,
+        weight: 2,
+        opacity: 0.2,
+        dashArray: '5, 10'
+      }).addTo(map);
+
+      fadedLines[r.id] = L.polyline([], {
+        color,
+        weight: 3,
+        opacity: 1
+      }).addTo(map);
+    }
+
+    let step = steps[r.id];
+    let path = paths[r.id];
+
+    // movement
+    if (step < path.length) {
+
+      if (!responderMarkers[r.id]) {
+        responderMarkers[r.id] = L.marker(path[step], { icon: icons.busy }).addTo(map);
+      } else {
+        responderMarkers[r.id].setLatLng(path[step]);
       }
 
-      if(!target) continue;
+      let progress = step / totalSteps[r.id];
+      let remaining = Math.max(0, (1 - progress) * 100);
 
-      if(!paths[r.id]){
-        let route=await getRoute(
-          {lat:r.lat,lng:r.lng},
-          {lat:target.lat,lng:target.lng}
-        );
-        if(!route) continue;
+      etaDisplay[r.id] =
+        `${Math.floor(remaining / 5)}m ${Math.floor((remaining % 5) * 12)}s`;
 
-        let coords=route.geometry.coordinates.map(c=>[c[1],c[0]]);
+      fadedLines[r.id].addLatLng(path[step]);
+      steps[r.id]++;
+    }
 
-        paths[r.id]=coords;
-        steps[r.id]=0;
-        totalSteps[r.id]=coords.length;
+    // 🔥 FIXED RESET BLOCK
+    if (step >= path.length - 1) {
 
-        routeLines[r.id]=L.polyline(coords,{color}).addTo(map);
-        fadedLines[r.id]=L.polyline([],{color:"grey"}).addTo(map);
-      }
+      if (states[r.id] === "incident") {
 
-      let step=steps[r.id];
-      let path=paths[r.id];
+        await fetch("/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: target.id })
+        });
 
-      if(step<path.length){
+        // 🔥 CLEAR OLD PATH BEFORE RETURN
+        delete paths[r.id];
+        delete steps[r.id];
+        delete totalSteps[r.id];
 
-        if(!responderMarkers[r.id]){
-          responderMarkers[r.id]=L.marker(path[step],{icon:icons.busy}).addTo(map);
-        }else{
-          responderMarkers[r.id].setLatLng(path[step]);
-          responderMarkers[r.id].setIcon(icons.busy);
-        }
+        if (routeLines[r.id]) map.removeLayer(routeLines[r.id]);
+        if (fadedLines[r.id]) map.removeLayer(fadedLines[r.id]);
 
-        // 🔥 SCALED ETA (KEY FIX)
-        let progress = step / totalSteps[r.id];
-        let remaining = Math.max(0, (1 - progress) * 100); // scaled %
+        delete routeLines[r.id];
+        delete fadedLines[r.id];
 
-        let mins = Math.floor(remaining / 5); // scaling factor
-        let secs = Math.floor((remaining % 5) * 12);
+        // now start return
+        states[r.id] = "return";
 
-        etaDisplay[r.id]=`${mins}m ${secs}s`;
+      } else {
 
-        fadedLines[r.id].addLatLng(path[step]);
+        // reached base → full reset
+        delete states[r.id];
 
-        steps[r.id]++;
-      }
+        if (routeLines[r.id]) map.removeLayer(routeLines[r.id]);
+        if (fadedLines[r.id]) map.removeLayer(fadedLines[r.id]);
 
-      if(step>=path.length-1){
-
-        if(states[r.id]==="incident"){
-          await fetch("/resolve",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({id:target.id})
-          });
-
-          delete paths[r.id];
-          delete steps[r.id];
-
-        }else{
-          states[r.id]=null;
-
-          map.removeLayer(routeLines[r.id]);
-          map.removeLayer(fadedLines[r.id]);
-
-          delete paths[r.id];
-          delete steps[r.id];
-        }
-
+        delete paths[r.id];
+        delete steps[r.id];
+        delete totalSteps[r.id];
+        delete routeLines[r.id];
+        delete fadedLines[r.id];
         delete etaDisplay[r.id];
       }
+    }
+    
 
+  } else {
+    // idle
+    if (!responderMarkers[r.id]) {
+      responderMarkers[r.id] = L.marker(
+        [r.lat, r.lng],
+        { icon: icons.free }
+      ).addTo(map);
     } else {
-
-      if(!responderMarkers[r.id]){
-        responderMarkers[r.id]=L.marker([r.lat,r.lng],{icon:icons.free}).addTo(map);
-      }else{
-        responderMarkers[r.id].setLatLng([r.lat,r.lng]);
-        responderMarkers[r.id].setIcon(icons.free);
-      }
+      responderMarkers[r.id].setLatLng([r.lat, r.lng]);
+      responderMarkers[r.id].setIcon(icons.free);
     }
   }
 
-  // ETA PANEL
-  let html="<b>Live ETA:</b><br>";
-  for(let id in etaDisplay){
-    html+=`🚑 Responder ${id}: ${etaDisplay[id]}<br>`;
   }
-  document.getElementById("etaBox").innerHTML=html;
+
+  // Update ETA List UI
+  let html = "";
+  let keys = Object.keys(etaDisplay);
+  if (keys.length === 0) {
+    html = "No active dispatches";
+  } else {
+    for (let id in etaDisplay) {
+      html += `<div class="eta-row">
+                 <span class="unit-id">UNT-${id.padStart(3,'0')}</span> 
+                 <span class="time-rem">${etaDisplay[id]}</span>
+               </div>`;
+    }
+  }
+  etaListEl.innerHTML = html;
 }
 </script>
 

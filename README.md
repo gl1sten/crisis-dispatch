@@ -33,6 +33,7 @@ The system simulates how modern emergency services can be optimized using:
 | Base locations displayed on map | Done |
 | Live ETA tracking (scaled to simulation speed) | Done |
 | Path fading to show movement progress | Done |
+| Added radius limit to the responder spawn and changed UI|
 
 ---
 
