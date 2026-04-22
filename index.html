@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Crisis Dispatch</title>
+  <style>
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 40px);
+      gap: 2px;
+    }
+    .cell {
+      width: 40px;
+      height: 40px;
+      background: #eee;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Caller Panel</h2>
+<button onclick="sendSOS('fire')"> Fire</button>
+<button onclick="sendSOS('medical')"> Medical</button>
+<button onclick="sendSOS('crime')"> Crime</button>
+
+<h2>Map</h2>
+<div class="grid" id="grid"></div>
+
+<script>
+const grid = document.getElementById("grid");
+
+// create grid
+for (let i = 0; i < 100; i++) {
+  const cell = document.createElement("div");
+  cell.className = "cell";
+  grid.appendChild(cell);
+}
+
+// send SOS
+function sendSOS(type) {
+	fetch("/sos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: type })
+  });
+}
+
+// update map
+async function update() {
+  try {
+    const res1 = await fetch("/incidents");
+    const incidents = await res1.json();
+
+    const res2 = await fetch("/responders");
+    const responders = await res2.json();
+
+    const cells = document.querySelectorAll(".cell");
+
+    // reset grid
+    cells.forEach(cell => cell.style.background = "#eee");
+
+    // draw incidents (red)
+    incidents.forEach(i => {
+      const index = i.y * 10 + i.x;
+      if (cells[index]) {
+        cells[index].style.background = "red";
+      }
+    });
+
+    // draw responders (blue)
+    responders.forEach(r => {
+      const index = r.y * 10 + r.x;
+      if (cells[index]) {
+        cells[index].style.background = "blue";
+      }
+    });
+	
+	responders.forEach(r => {
+		const index = r.y * 10 + r.x;
+		if (cells[index]) {
+			cells[index].style.background = r.busy ? "purple" : "blue";
+		}
+	});
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// refresh every second
+setInterval(update, 1000);
+
+</script>
+
+</body>
+</html>
