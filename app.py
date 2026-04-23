@@ -184,6 +184,20 @@ def resolve():
             break
 
     return jsonify({"status": "resolved"})
+
+@app.route("/update_location", methods=["POST"])
+def update_location():
+    data = request.json
+
+    for r in responders:
+        if r["id"] == data["id"]:
+            r["lat"] = data["lat"]
+            r["lng"] = data["lng"]
+            break
+
+    return jsonify({"status": "updated"})
+
+
 @app.route("/respond", methods=["POST"])
 def respond():
     data = request.json
