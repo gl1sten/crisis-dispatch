@@ -1,43 +1,69 @@
 # Crisis Dispatch System
 
-> A real-time, map-based emergency dispatch prototype with live GPS tracking, road-based routing, and intelligent responder allocation.
+> A hackathon prototype simulating a modern emergency response network with real-time mapping, dispatcher approval workflow, and live responder movement.
 
 ---
 
 ## Overview
 
-Crisis Dispatch started as a basic grid-based simulation and has evolved into a fully functional emergency dispatch system featuring real-world routing, live ETA tracking, and a complete responder lifecycle.
-
-The system simulates how modern emergency services can be optimized using:
-
-- **Real-time location tracking**
-- **Intelligent nearest-responder allocation**
-- **Road-based navigation**
-- **Dynamic incident resolution**
+Crisis Dispatch System demonstrates how emergency incidents can be reported, reviewed, assigned, and resolved through a dual-interface platform. It combines operational visibility, proximity-based response logic, and live route simulation.
 
 ---
 
-## Current Features
+## Current Status
 
-| Feature | Status |
+This project has evolved from an early grid-based simulation into a fully map-based dispatch prototype with separate caller and dispatcher interfaces.
+
+### Working Features
+
+- **Dual interface system** — Caller/SOS interface and Dispatcher/Responder terminal
+- **Emergency request generation** — Fire, Medical, Crime
+- **Live GPS-based SOS generation**
+- **Real-time map visualization** using Leaflet.js, OpenStreetMap, and Carto Dark Theme
+- **Dispatcher approval workflow** — Accept or Deny incoming requests
+- **Dynamic responder spawning** within operational radius
+- **Live responder movement** toward incident along real roads
+- **Road-based route visualization** using OSRM
+- **Incident resolution flow**
+- **Responder return-to-base logic**
+- **Real-time operational dashboard UI**
+
+---
+
+## System Flow
+
+### Caller Side
+
+1. User opens the command page
+2. User sends an SOS request
+3. Incident is generated on the live map
+
+### Dispatcher Side
+
+1. Incoming alert appears in the terminal
+2. Dispatcher reviews the request
+3. Accept or Deny decision is made
+
+### If Accepted
+
+1. Nearest available responder is dispatched
+2. Route is generated using real roads
+3. Both interfaces update in real time
+4. Incident resolves on arrival
+
+---
+
+## Technology Stack
+
+| Layer | Technologies |
 |---|---|
-| SOS-based emergency triggering (Fire / Medical / Crime) | Done |
-| Real-time GPS location detection | Done |
-| Live map via Leaflet & OpenStreetMap | Done |
-| Automatic nearest-responder assignment | Done |
-| Road-based routing via OSRM | Done |
-| Smooth responder movement along real roads | Done |
-| Live incident tracking on map | Done |
-| Responder status tracking (available / busy) | Done |
-| Return-to-base after task completion | Done |
-| Base locations displayed on map | Done |
-| Live ETA tracking (scaled to simulation speed) | Done |
-| Path fading to show movement progress | Done |
-| Added radius limit to the responder spawn and changed UI|
+| Backend | Python, Flask |
+| Frontend | HTML, CSS, JavaScript |
+| Maps / Routing | Leaflet.js, OpenStreetMap, OSRM |
 
 ---
 
-## Getting Started
+## How to Run Locally
 
 ### 1. Clone the repository
 
@@ -52,74 +78,61 @@ cd crisis-dispatch
 pip install -r requirements.txt
 ```
 
-### 3. Run the app
+### 3. Run the server
 
 ```bash
 python app.py
 ```
 
-### 4. Open in browser
+### 4. Open the interfaces
 
+**Caller Interface**
 ```
 http://127.0.0.1:5000
 ```
 
----
-
-## How to Use
-
-1. **Allow location access** when prompted by your browser
-2. **Click an emergency button** to trigger an SOS:
-   - Fire
-   - Medical
-   - Crime
-3. Watch responders get **automatically dispatched**, navigate via real roads, and **return to base** after resolution.
-
----
-
-## Map Legend
-
-| Color | Meaning |
-|---|---|
-| Red | Active incident |
-| Blue | Available responder |
-| Purple | Busy responder |
-| Grey | Responder base location |
-| Cyan | Route to incident |
-| Green | Return route to base |
-
----
-
-## Responder Lifecycle
-
-Each incident follows a full lifecycle:
-
+**Dispatcher Interface**
 ```
-SOS Triggered → Nearest Responder Assigned → Route Generated (OSRM)
-      → Live Movement + ETA Display → Incident Resolved → Return to Base
+http://127.0.0.1:5000/responder
 ```
 
 ---
 
-## Limitations
+## File Structure
 
-- Uses **simulated responders** — not connected to real emergency services
-- ETA does **not** account for real-time traffic conditions
-- Simulation speed is **scaled** for demonstration purposes
-- Uses the **public OSRM service** (may have latency)
-- **No database** — data resets on every restart
+```
+crisis-dispatch/
+├── app.py
+├── index.html
+├── responder.html
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## Key Highlights
+
+- Real-time emergency workflow simulation
+- Manual dispatcher approval logic
+- Smart responder deployment system
+- Interactive tactical dashboard
+- Two synchronized interfaces
+- Modern dark UI design
+- Ready for future scaling
 
 ---
 
 ## Future Scope
 
-- [ ] Priority-based dispatch (A1 incidents handled first)
-- [ ] Traffic-aware ETA calculations
-- [ ] Heatmap for crisis-prone areas
-- [ ] Multi-dispatcher coordination system
-- [ ] Real-time communication between services
+- [ ] Multi-responder dispatch logic
+- [ ] Hospital and fire station datasets
 - [ ] AI-based incident prioritization
-- [ ] Mobile application version
+- [ ] Heatmaps for high-risk zones
+- [ ] Authentication system
+- [ ] Live communications module
+- [ ] Mobile application
+- [ ] Analytics dashboard
 
 ---
 
@@ -135,4 +148,4 @@ SOS Triggered → Nearest Responder Assigned → Route Generated (OSRM)
 
 ## Vision
 
-> To build a scalable emergency response system that reduces response time and improves coordination using real-time data and intelligent dispatching.
+> To create a scalable emergency coordination platform that improves response time, situational awareness, and dispatch efficiency using real-time technology.
