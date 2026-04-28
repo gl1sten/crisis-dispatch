@@ -35,21 +35,18 @@
       width: 100vw;
     }
 
-    /* --- MAP SECTION --- */
-    #map { 
-      flex: 1; /* Occupy remaining space */
-      height: 100%; 
+    #map {
+      flex: 1;
+      height: 100%;
       z-index: 1;
       background: #0b0d10;
     }
 
-    /* --- TACTICAL PANEL --- */
     #panel {
       width: 380px;
       min-width: 380px;
       background: var(--sidebar-bg);
       backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
       border-left: 1px solid var(--border-thin);
       padding: 32px 24px;
       display: flex;
@@ -73,10 +70,9 @@
       font-weight: 700; font-size: 16px;
     }
 
-    .brand-text h2 { font-size: 16px; margin: 0; letter-spacing: -0.5px; text-transform: uppercase; }
+    .brand-text h2 { font-size: 16px; margin: 0; text-transform: uppercase; }
     .brand-text span { font-size: 10px; color: var(--accent-blue); font-weight: 700; text-transform: uppercase; }
 
-    /* --- REQUEST CARDS --- */
     #requests {
       flex-grow: 1;
       overflow-y: auto;
@@ -87,40 +83,68 @@
       font-weight: 700;
       color: var(--text-dim);
       text-transform: uppercase;
-      letter-spacing: 1px;
       margin-bottom: 16px;
       display: block;
     }
 
     .card {
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(255,255,255,0.03);
       border: 1px solid var(--border-thin);
       padding: 20px;
       margin-bottom: 16px;
       border-radius: 12px;
     }
 
-    .card-meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-red); margin-bottom: 8px; display: block; }
-    .card-type { font-weight: 700; font-size: 18px; margin-bottom: 12px; display: block; }
+    .card-meta { font-size: 11px; color: var(--accent-red); display:block; margin-bottom:8px; }
+    .card-type { font-weight:700; font-size:18px; display:block; margin-bottom:12px; }
 
-    .btn-group { display: flex; gap: 10px; }
+    .btn-group { display:flex; gap:10px; }
 
     button {
-      flex: 1; padding: 12px; border-radius: 8px; border: 1px solid transparent;
-      cursor: pointer; font-weight: 600; font-size: 11px; transition: all 0.2s ease;
+      flex:1;
+      padding:12px;
+      border-radius:8px;
+      border:none;
+      cursor:pointer;
+      font-weight:600;
+      font-size:11px;
     }
 
-    .accept { background: var(--accent-green); color: #05070a; }
-    .deny { background: rgba(255, 59, 59, 0.1); color: var(--accent-red); border-color: rgba(255, 59, 59, 0.2); }
+    .accept { background: var(--accent-green); color:#000; }
+    .deny { background: rgba(255,59,59,0.1); color: var(--accent-red); }
 
-    .status-footer { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-thin); }
-    .status-tag { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); }
-    .dot { width: 8px; height: 8px; background: var(--accent-green); border-radius: 50%; box-shadow: 0 0 10px var(--accent-green); }
-    
-    /* Markers */
-    .v-responder { background: var(--accent-blue); border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 15px var(--accent-blue); }
-    .v-incident { background: var(--accent-red); border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 15px var(--accent-red); }
+    .status-footer {
+      margin-top:24px;
+      padding-top:20px;
+      border-top:1px solid var(--border-thin);
+    }
 
+    .status-tag {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:11px;
+      color:var(--text-dim);
+    }
+
+    .dot {
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:var(--accent-green);
+    }
+
+    .v-responder {
+      background: var(--accent-blue);
+      border: 3px solid white;
+      border-radius: 50%;
+    }
+
+    .v-incident {
+      background: var(--accent-red);
+      border: 3px solid white;
+      border-radius: 50%;
+    }
   </style>
 </head>
 
@@ -153,138 +177,224 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-// UI Clock
-setInterval(() => {
-    document.getElementById('clock').innerText = new Date().toLocaleTimeString();
-}, 1000);
+setInterval(()=>{
+  document.getElementById("clock").innerText =
+    new Date().toLocaleTimeString();
+},1000);
 
 let map;
 let responderId = 1;
 let responderMarker;
 let incidentMarkers = {};
-let path = [];
-let step = 0;
-let moving = false;
+let routeLines = {};
 
-// ---------------- MAP ----------------
-async function initMap() {
+const BASE = window.location.origin;
+
+// ---------- ICONS ----------
+const responderIcon = L.divIcon({
+  className:"v-responder",
+  iconSize:[16,16],
+  iconAnchor:[8,8]
+});
+
+const incidentIcon = L.divIcon({
+  className:"v-incident",
+  iconSize:[16,16],
+  iconAnchor:[8,8]
+});
+
+// ---------- MAP ----------
+async function initMap(){
+
   let r = null;
-  while (!r) {
-    const res = await fetch("/responders").catch(()=>null);
-    if(res){
-        const data = await res.json();
-        r = data.find(x => x.id === responderId);
+
+  while(!r){
+    try{
+      let res = await fetch(BASE + "/responders");
+      let data = await res.json();
+      r = data.find(x => x.id === responderId);
+    }catch(e){}
+
+    if(!r){
+      await new Promise(done => setTimeout(done,1000));
     }
-    if (!r) await new Promise(res => setTimeout(res, 500));
   }
 
-  // FIX: Explicit map sizing
-  map = L.map('map', { zoomControl: false, attributionControl: false }).setView([r.lat, r.lng], 13);
+  map = L.map("map").setView([r.lat,r.lng],13);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-  
-  // Force Leaflet to recalculate the map size
-  setTimeout(() => { map.invalidateSize(); }, 200);
+  L.tileLayer(
+    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+  ).addTo(map);
 
-  const responderIcon = L.divIcon({ className: 'v-responder', iconSize: [16, 16], iconAnchor: [8, 8] });
-  responderMarker = L.marker([r.lat, r.lng], { icon: responderIcon }).addTo(map);
+  setTimeout(()=>map.invalidateSize(),300);
+
+  responderMarker = L.marker([r.lat,r.lng],{
+    icon: responderIcon
+  }).addTo(map);
 }
 
-// ---------------- REST OF LOGIC (IDENTICAL TO ORIGINAL) ----------------
-async function syncResponder() {
-  let res = await fetch("/responders").catch(()=>null);
-  if(!res) return;
-  let data = await res.json();
-  let r = data.find(r => r.id === responderId);
-  if (responderMarker && r) {
-    responderMarker.setLatLng([r.lat, r.lng]);
-  }
+// ---------- RESPONDER LIVE ----------
+async function syncResponder(){
+  try{
+    let res = await fetch(BASE + "/responders");
+    let data = await res.json();
+
+    let r = data.find(x => x.id === responderId);
+
+    if(r && responderMarker){
+      responderMarker.setLatLng([r.lat,r.lng]);
+    }
+
+  }catch(e){}
 }
 
-async function startMovement(targetLat, targetLng) {
-  let res = await fetch("/responders");
-  let data = await res.json();
-  let r = data.find(x => x.id === responderId);
+// ---------- ROAD ROUTE ----------
+async function drawRoadRoute(incident){
 
-  let routeRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${r.lng},${r.lat};${targetLng},${targetLat}?overview=full&geometries=geojson`);
-  let routeData = await routeRes.json();
-  let route = routeData.routes[0];
+  if(!responderMarker) return;
 
-  if (!route) return;
+  let start = responderMarker.getLatLng();
 
-  path = route.geometry.coordinates.map(c => [c[1], c[0]]);
-  step = 0;
-  moving = true;
+  try{
+    let resRoute = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${incident.lng},${incident.lat}?overview=full&geometries=geojson`
+    );
 
-  L.polyline(path, { color: "#3b82f6", weight: 3, opacity: 0.6, dashArray: '5, 10' }).addTo(map);
-  moveStep();
+    let routeData = await resRoute.json();
+
+    if(!routeData.routes || !routeData.routes[0]) return;
+
+    let coords = routeData.routes[0].geometry.coordinates.map(
+      c => [c[1], c[0]]
+    );
+
+    if(routeLines[incident.id]){
+      map.removeLayer(routeLines[incident.id]);
+    }
+
+    routeLines[incident.id] = L.polyline(coords,{
+      color:"#3b82f6",
+      weight:3,
+      opacity:0.4
+    }).addTo(map);
+
+  }catch(e){}
 }
 
-function moveStep() {
-  if (!moving || step >= path.length) {
-    moving = false; return;
-  }
-  let pos = path[step];
-  responderMarker.setLatLng(pos);
+// ---------- INCIDENTS ----------
+async function loadIncidents(){
 
-  fetch("/update_location", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: responderId, lat: pos[0], lng: pos[1] })
-  });
+  try{
+    let res = await fetch(BASE + "/incidents");
+    let data = await res.json();
 
-  step++;
-  setTimeout(moveStep, 1000);
-}
+    let container = document.getElementById("requests");
+    container.innerHTML = "";
 
-async function loadIncidents() {
-  let res = await fetch("/incidents").catch(()=>null);
-  if(!res) return;
-  let data = await res.json();
-  const container = document.getElementById("requests");
-  const incidentIcon = L.divIcon({ className: 'v-incident', iconSize: [14, 14], iconAnchor: [7, 7] });
+    // remove old markers
+    Object.keys(incidentMarkers).forEach(id=>{
+      if(!data.find(x => x.id == id)){
+        if(incidentMarkers[id]){
+          map.removeLayer(incidentMarkers[id]);
+          delete incidentMarkers[id];
+        }
 
-  container.innerHTML = "";
-  data.forEach(i => {
-    if (i.status === "waiting") {
-      if (!incidentMarkers[i.id]) {
-        incidentMarkers[i.id] = L.marker([i.lat, i.lng], { icon: incidentIcon }).addTo(map);
+        if(routeLines[id]){
+          map.removeLayer(routeLines[id]);
+          delete routeLines[id];
+        }
       }
+    });
+
+    for (const i of data){
+
+      // SOS marker
+      if(!incidentMarkers[i.id]){
+        incidentMarkers[i.id] =
+          L.marker([i.lat,i.lng],{
+            icon: incidentIcon
+          }).addTo(map);
+      }
+
+      // if assigned to this responder → road route
+      if(i.responder_id === responderId){
+        await drawRoadRoute(i);
+      }
+
       let div = document.createElement("div");
       div.className = "card";
+
       div.innerHTML = `
         <span class="card-meta">INCIDENT ID: #${i.id}</span>
         <span class="card-type">${i.type.toUpperCase()}</span>
+        <span class="card-meta">STATUS: ${i.status}</span>
+
         <div class="btn-group">
-          <button class="accept" onclick="accept(${i.id}, ${i.lat}, ${i.lng})">ACCEPT</button>
-          <button class="deny" onclick="deny(${i.id})">DENY</button>
+          <button class="accept" onclick="acceptIncident(${i.id})">
+            ACCEPT
+          </button>
+
+          <button class="deny" onclick="denyIncident(${i.id})">
+            DENY
+          </button>
         </div>
       `;
+
       container.appendChild(div);
     }
-  });
+
+  }catch(e){
+    console.log(e);
+  }
 }
 
-async function accept(id, lat, lng) {
-  await fetch("/respond", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ incident_id: id, responder_id: responderId, action: "accept" })
+// ---------- ACCEPT ----------
+async function acceptIncident(id){
+
+  await fetch(BASE + "/respond",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      incident_id:id,
+      responder_id:responderId,
+      action:"accept"
+    })
   });
-  startMovement(lat, lng);
+
+  loadIncidents();
 }
 
-async function deny(id) {
-  await fetch("/respond", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ incident_id: id, responder_id: responderId, action: "deny" })
+// ---------- DENY ----------
+async function denyIncident(id){
+
+  await fetch(BASE + "/respond",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      incident_id:id,
+      responder_id:responderId,
+      action:"deny"
+    })
   });
+
+  if(incidentMarkers[id]){
+    map.removeLayer(incidentMarkers[id]);
+    delete incidentMarkers[id];
+  }
+
+  if(routeLines[id]){
+    map.removeLayer(routeLines[id]);
+    delete routeLines[id];
+  }
+
+  loadIncidents();
 }
 
-initMap().then(() => {
-  setInterval(loadIncidents, 3000);
-  setInterval(syncResponder, 1000);
+// ---------- START ----------
+initMap().then(()=>{
+  loadIncidents();
+  setInterval(loadIncidents,2000);
+  setInterval(syncResponder,1000);
 });
 </script>
 

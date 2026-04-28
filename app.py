@@ -8,35 +8,20 @@ app = Flask(__name__)
 incidents = []
 responders = []
 
-MAX_RADIUS = 5  # km
+MAX_RADIUS = 8  # km dispatch radius
 
 # -----------------------------
-# Generate location near user
+# Helpers
 # -----------------------------
-def random_nearby(lat, lng, radius_km=5):
+def random_nearby(lat, lng, radius_km=8):
     radius_deg = radius_km / 111
     return {
         "lat": lat + random.uniform(-radius_deg, radius_deg),
         "lng": lng + random.uniform(-radius_deg, radius_deg)
     }
 
-# -----------------------------
-# Serve frontend
-# -----------------------------
-@app.route("/")
-def serve():
-    return send_from_directory(".", "index.html")
-
-@app.route("/responder")
-def responder_page():
-    return send_from_directory(".", "responder.html")
-
-# -----------------------------
-# Distance (Haversine)
-# -----------------------------
 def distance(lat1, lng1, lat2, lng2):
     R = 6371
-
     dlat = math.radians(lat2 - lat1)
     dlng = math.radians(lng2 - lng1)
 
@@ -51,11 +36,26 @@ def distance(lat1, lng1, lat2, lng2):
     return R * c
 
 # -----------------------------
-# Get responders
+# Frontend Pages
+# -----------------------------
+@app.route("/")
+def serve():
+    return send_from_directory(".", "index.html")
+
+@app.route("/responder")
+def responder_page():
+    return send_from_directory(".", "responder.html")
+
+# -----------------------------
+# API
 # -----------------------------
 @app.route("/responders")
 def get_responders():
     return jsonify(responders)
+
+@app.route("/incidents")
+def get_incidents():
+    return jsonify(incidents)
 
 # -----------------------------
 # SOS
@@ -64,116 +64,84 @@ def get_responders():
 def sos():
     data = request.json
 
-    priority_map = {
-        "fire": "A1",
-        "medical": "A2",
-        "crime": "B1"
-    }
-
     incident = {
         "id": len(incidents) + 1,
         "type": data.get("type"),
         "lat": data.get("lat"),
         "lng": data.get("lng"),
         "assigned": False,
-        "priority": priority_map.get(data.get("type"), "C1"),
-        "responder_id": None,
         "status": "waiting",
-        "distance_km": None
+        "responder_id": None
     }
 
     incidents.append(incident)
 
     global responders
 
-    if len(responders) == 0:
-        need_spawn = True
-    else:
-        avg_dist = sum(
-            distance(r["lat"], r["lng"], data["lat"], data["lng"])
-            for r in responders
-        ) / len(responders)
+    # FIXED: respawn responders every SOS inside 8km
+    responders.clear()
 
-        need_spawn = avg_dist > 5
+    for i in range(5):
+        loc = random_nearby(data["lat"], data["lng"], 8)
 
-    if need_spawn:
-        responders.clear()
-
-        for i in range(5):
-            loc = random_nearby(data["lat"], data["lng"])
-
-            responders.append({
-                "id": i + 1,
-                "lat": loc["lat"],
-                "lng": loc["lng"],
-                "base_lat": loc["lat"],
-                "base_lng": loc["lng"],
-                "busy": False
-            })
+        responders.append({
+            "id": i + 1,
+            "lat": loc["lat"],
+            "lng": loc["lng"],
+            "base_lat": loc["lat"],
+            "base_lng": loc["lng"],
+            "busy": False
+        })
 
     return jsonify(incident)
 
 # -----------------------------
-# Incidents + Assignment
+# Accept / Deny
 # -----------------------------
-@app.route("/incidents")
-def get_incidents():
+@app.route("/respond", methods=["POST"])
+def respond():
+    data = request.json
 
-    incidents.sort(key=lambda x: x["priority"])
+    incident_id = data["incident_id"]
+    responder_id = data["responder_id"]
+    action = data["action"]
 
     for incident in incidents:
-        if not incident["assigned"]:
+        if incident["id"] == incident_id:
 
-            nearest = None
-            min_dist = float("inf")
+            if action == "accept":
 
-            for r in responders:
-                if not r["busy"]:
+                selected = None
+
+                for r in responders:
+                    if r["id"] == responder_id:
+                        selected = r
+                        break
+
+                if selected:
+
                     d = distance(
-                        r["lat"], r["lng"],
+                        selected["lat"], selected["lng"],
                         incident["lat"], incident["lng"]
                     )
 
-                    if d < min_dist and d <= MAX_RADIUS:
-                        min_dist = d
-                        nearest = r
+                    if d <= MAX_RADIUS and not selected["busy"]:
+                        incident["assigned"] = True
+                        incident["status"] = "assigned"
+                        incident["responder_id"] = responder_id
+                        selected["busy"] = True
+                    else:
+                        incident["status"] = "out_of_range"
 
-            if nearest:
-                nearest["busy"] = True
-                incident["assigned"] = True
-                incident["responder_id"] = nearest["id"]
-                incident["status"] = "assigned"
-                incident["distance_km"] = round(min_dist, 2)
-            else:
-                incident["status"] = "no_responder_available"
+            elif action == "deny":
+                incident["status"] = "denied"
 
-    return jsonify(incidents)
+            return jsonify({"msg": "done"})
 
-# -----------------------------
-# Resolve
-# -----------------------------
-@app.route("/resolve", methods=["POST"])
-def resolve():
-    data = request.json
-    incident_id = data.get("id")
-
-    for incident in incidents[:]:
-        if incident["id"] == incident_id:
-
-            responder_id = incident.get("responder_id")
-
-            for r in responders:
-                if r["id"] == responder_id:
-                    r["busy"] = False
-                    break
-
-            incidents.remove(incident)
-            break
-
-    return jsonify({"status": "resolved"})
+    return jsonify({"msg": "incident not found"})
 
 # -----------------------------
-# Update responder location
+# Movement sync from frontend
 # -----------------------------
 @app.route("/update_location", methods=["POST"])
 def update_location():
@@ -188,35 +156,29 @@ def update_location():
     return jsonify({"status": "updated"})
 
 # -----------------------------
-# Manual responder accept/deny
+# Resolve incident
 # -----------------------------
-@app.route("/respond", methods=["POST"])
-def respond():
+@app.route("/resolve", methods=["POST"])
+def resolve():
     data = request.json
+    incident_id = data["id"]
 
-    incident_id = data["incident_id"]
-    responder_id = data["responder_id"]
-    action = data["action"]
-
-    for incident in incidents:
+    for incident in incidents[:]:
         if incident["id"] == incident_id:
 
-            if action == "accept":
-                incident["assigned"] = True
-                incident["responder_id"] = responder_id
-                incident["status"] = "assigned"
+            responder_id = incident["responder_id"]
 
-                for r in responders:
-                    if r["id"] == responder_id:
-                        r["busy"] = True
-                        break
+            for r in responders:
+                if r["id"] == responder_id:
+                    r["busy"] = False
+                    r["lat"] = r["base_lat"]
+                    r["lng"] = r["base_lng"]
+                    break
 
-            elif action == "deny":
-                incident["status"] = "denied"
+            incidents.remove(incident)
+            return jsonify({"status": "resolved"})
 
-            return jsonify({"msg": "done"})
-
-    return jsonify({"msg": "incident not found"})
+    return jsonify({"status": "not found"})
 
 # -----------------------------
 # Run

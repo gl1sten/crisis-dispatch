@@ -223,274 +223,250 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-// UI Elements
 const clockEl = document.getElementById('clock');
 const nodeCountEl = document.getElementById('nodeCount');
 const etaListEl = document.getElementById('etaList');
 
 setInterval(() => {
-    clockEl.innerText = new Date().toLocaleTimeString();
+  clockEl.innerText = new Date().toLocaleTimeString();
 }, 1000);
 
-// App State
 let map, userPos, userMarker;
+
 let responderMarkers = {};
 let baseMarkers = {};
 let incidentMarkers = {};
+
 let paths = {};
 let steps = {};
-let totalSteps = {};
 let routeLines = {};
-let fadedLines = {};
-let states = {};
 let etaDisplay = {};
 
-// Custom Markers
 const icons = {
   incident: L.divIcon({
     className: 'v-marker',
-    html: `<div style="background:#ff3b3b; width:14px; height:14px; border-radius:50%; border:3px solid #fff; box-shadow: 0 0 20px #ff3b3b;"></div>`,
-    iconSize: [14, 14], iconAnchor: [7, 7]
+    html: `<div style="background:#ff3b3b;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 20px #ff3b3b;"></div>`,
+    iconSize: [14,14], iconAnchor:[7,7]
   }),
+
   free: L.divIcon({
     className: 'v-marker',
-    html: `<div style="background:#00f294; width:10px; height:10px; border-radius:50%; border:2px solid #fff;"></div>`,
-    iconSize: [10, 10], iconAnchor: [5, 5]
+    html: `<div style="background:#00f294;width:10px;height:10px;border-radius:50%;border:2px solid #fff;"></div>`,
+    iconSize:[10,10], iconAnchor:[5,5]
   }),
+
   busy: L.divIcon({
     className: 'v-marker',
-    html: `<div style="background:#3b82f6; width:10px; height:10px; border-radius:50%; border:2px solid #fff; box-shadow: 0 0 15px #3b82f6;"></div>`,
-    iconSize: [10, 10], iconAnchor: [5, 5]
+    html: `<div style="background:#3b82f6;width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 15px #3b82f6;"></div>`,
+    iconSize:[10,10], iconAnchor:[5,5]
   })
 };
 
-function initMap(lat, lng) {
-  // Fix: Explicitly ensure map fills the container
-  map = L.map('map', { 
-    zoomControl: false, 
-    attributionControl: false 
-  }).setView([lat, lng], 15);
-  
-  // High-Contrast Dark Tiles
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19
-  }).addTo(map);
+function initMap(lat,lng){
+  map = L.map('map',{
+    zoomControl:false,
+    attributionControl:false
+  }).setView([lat,lng],15);
 
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    {maxZoom:19}
+  ).addTo(map);
 
-  userMarker = L.circleMarker([lat, lng], {
-    radius: 8, fillColor: "#fff", color: "#3b82f6", weight: 3, fillOpacity: 1
+  L.control.zoom({position:'bottomright'}).addTo(map);
+
+  userMarker = L.circleMarker([lat,lng],{
+    radius:8,
+    fillColor:"#fff",
+    color:"#3b82f6",
+    weight:3,
+    fillOpacity:1
   }).addTo(map).bindPopup("Current Position");
 }
 
 navigator.geolocation.getCurrentPosition(
-  pos => { userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; start(); },
-  () => { userPos = { lat: 28.6139, lng: 77.2090 }; start(); }
+  pos => {
+    userPos = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude
+    };
+    start();
+  },
+  () => {
+    userPos = {lat:28.6139,lng:77.2090};
+    start();
+  }
 );
 
-function start() {
-  initMap(userPos.lat, userPos.lng);
-  setInterval(update, 1000);
+function start(){
+  initMap(userPos.lat,userPos.lng);
+  setInterval(update,1000);
 }
 
-function sendSOS(type) {
-  fetch("/sos", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type, lat: userPos.lat, lng: userPos.lng })
+function sendSOS(type){
+  fetch("/sos",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      type:type,
+      lat:userPos.lat,
+      lng:userPos.lng
+    })
   });
 }
 
-async function getRoute(start, end) {
-  try {
-    let res = await fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`);
+async function getRoute(start,end){
+  try{
+    let res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`
+    );
     let data = await res.json();
     return data.routes[0];
-  } catch { return null; }
+  }catch{
+    return null;
+  }
 }
 
-async function update() {
-  const resInc = await fetch("/incidents").catch(() => null);
-  const resRes = await fetch("/responders").catch(() => null);
-  
+async function update(){
+
+  const resInc = await fetch("/incidents").catch(()=>null);
+  const resRes = await fetch("/responders").catch(()=>null);
+
   if(!resInc || !resRes) return;
-  
+
   let incidents = await resInc.json();
   let responders = await resRes.json();
 
   nodeCountEl.innerText = responders.length;
 
-  // Render Incidents
-  incidents.forEach(i => {
-    if (!incidentMarkers[i.id]) {
-      incidentMarkers[i.id] = L.marker([i.lat, i.lng], { icon: icons.incident }).addTo(map);
+  // incidents
+  incidents.forEach(i=>{
+    if(!incidentMarkers[i.id]){
+      incidentMarkers[i.id] =
+        L.marker([i.lat,i.lng],{icon:icons.incident}).addTo(map);
     }
   });
 
-  // Cleanup Old Incidents
-  Object.keys(incidentMarkers).forEach(id => {
-    if (!incidents.find(i => i.id == id)) {
+  Object.keys(incidentMarkers).forEach(id=>{
+    if(!incidents.find(i=>i.id == id)){
       map.removeLayer(incidentMarkers[id]);
       delete incidentMarkers[id];
     }
   });
 
-  // Responders Logic
-  // Responders Logic
-for (let r of responders) {
+  for(let r of responders){
 
-  // base marker
-  if (!baseMarkers[r.id]) {
-    baseMarkers[r.id] = L.circleMarker(
-      [r.base_lat, r.base_lng],
-      { radius: 2, color: "#333" }
-    ).addTo(map);
-  }
-
-  // 🔥 IMPORTANT: check assignment properly
-  let assignedIncident = incidents.find(i => i.responder_id === r.id);
-
-  if (assignedIncident || states[r.id] === "return") {
-
-    let target;
-    let color = assignedIncident ? "#3b82f6" : "#00f294";
-
-    // 🔥 FIXED LOGIC
-    if (assignedIncident) {
-      target = assignedIncident;
-      states[r.id] = "incident";
-    } 
-    else if (states[r.id] === "return") {
-      target = { lat: r.base_lat, lng: r.base_lng };
-    } 
-    else {
-      continue; // 🚨 STOP unwanted movement
-    }
-
-    if (!target) continue;
-
-    // create path
-    if (!paths[r.id]) {
-      let route = await getRoute(
-        { lat: r.lat, lng: r.lng },
-        { lat: target.lat, lng: target.lng }
-      );
-
-      if (!route) continue;
-
-      let coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-
-      paths[r.id] = coords;
-      steps[r.id] = 0;
-      totalSteps[r.id] = coords.length;
-
-      routeLines[r.id] = L.polyline(coords, {
-        color,
-        weight: 2,
-        opacity: 0.2,
-        dashArray: '5, 10'
-      }).addTo(map);
-
-      fadedLines[r.id] = L.polyline([], {
-        color,
-        weight: 3,
-        opacity: 1
-      }).addTo(map);
-    }
-
-    let step = steps[r.id];
-    let path = paths[r.id];
-
-    // movement
-    if (step < path.length) {
-
-      if (!responderMarkers[r.id]) {
-        responderMarkers[r.id] = L.marker(path[step], { icon: icons.busy }).addTo(map);
-      } else {
-        responderMarkers[r.id].setLatLng(path[step]);
-      }
-
-      let progress = step / totalSteps[r.id];
-      let remaining = Math.max(0, (1 - progress) * 100);
-
-      etaDisplay[r.id] =
-        `${Math.floor(remaining / 5)}m ${Math.floor((remaining % 5) * 12)}s`;
-
-      fadedLines[r.id].addLatLng(path[step]);
-      steps[r.id]++;
-    }
-
-    // 🔥 FIXED RESET BLOCK
-    if (step >= path.length - 1) {
-
-      if (states[r.id] === "incident") {
-
-        await fetch("/resolve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: target.id })
-        });
-
-        // 🔥 CLEAR OLD PATH BEFORE RETURN
-        delete paths[r.id];
-        delete steps[r.id];
-        delete totalSteps[r.id];
-
-        if (routeLines[r.id]) map.removeLayer(routeLines[r.id]);
-        if (fadedLines[r.id]) map.removeLayer(fadedLines[r.id]);
-
-        delete routeLines[r.id];
-        delete fadedLines[r.id];
-
-        // now start return
-        states[r.id] = "return";
-
-      } else {
-
-        // reached base → full reset
-        delete states[r.id];
-
-        if (routeLines[r.id]) map.removeLayer(routeLines[r.id]);
-        if (fadedLines[r.id]) map.removeLayer(fadedLines[r.id]);
-
-        delete paths[r.id];
-        delete steps[r.id];
-        delete totalSteps[r.id];
-        delete routeLines[r.id];
-        delete fadedLines[r.id];
-        delete etaDisplay[r.id];
-      }
-    }
-    
-
-  } else {
-    // idle
-    if (!responderMarkers[r.id]) {
-      responderMarkers[r.id] = L.marker(
-        [r.lat, r.lng],
-        { icon: icons.free }
+    if(!baseMarkers[r.id]){
+      baseMarkers[r.id] = L.circleMarker(
+        [r.base_lat,r.base_lng],
+        {radius:2,color:"#444"}
       ).addTo(map);
-    } else {
-      responderMarkers[r.id].setLatLng([r.lat, r.lng]);
-      responderMarkers[r.id].setIcon(icons.free);
+    }
+
+    let assigned = incidents.find(i => i.responder_id === r.id);
+
+    // ASSIGNED = move responder
+    if(assigned){
+
+      if(!paths[r.id]){
+        let route = await getRoute(
+          {lat:r.lat,lng:r.lng},
+          {lat:assigned.lat,lng:assigned.lng}
+        );
+
+        if(route){
+          paths[r.id] =
+            route.geometry.coordinates.map(c=>[c[1],c[0]]);
+          steps[r.id] = 0;
+
+          routeLines[r.id] = L.polyline(paths[r.id],{
+            color:"#3b82f6",
+            weight:3,
+            opacity:0.35
+          }).addTo(map);
+        }
+      }
+
+      let path = paths[r.id];
+
+      if(path){
+
+        let step = steps[r.id];
+
+        if(step < path.length){
+
+          if(!responderMarkers[r.id]){
+            responderMarkers[r.id] =
+              L.marker(path[step],{icon:icons.busy}).addTo(map);
+          }else{
+            responderMarkers[r.id].setLatLng(path[step]);
+            responderMarkers[r.id].setIcon(icons.busy);
+          }
+
+          // backend sync
+          fetch("/update_location",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+              id:r.id,
+              lat:path[step][0],
+              lng:path[step][1]
+            })
+          });
+
+          let remain = path.length - step;
+          etaDisplay[r.id] =
+            `${Math.floor(remain/8)}m ${String((remain%8)*7).padStart(2,'0')}s`;
+
+          steps[r.id]++;
+
+        }else{
+
+          await fetch("/resolve",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({id:assigned.id})
+          });
+
+          if(routeLines[r.id]){
+            map.removeLayer(routeLines[r.id]);
+            delete routeLines[r.id];
+          }
+
+          delete paths[r.id];
+          delete steps[r.id];
+          delete etaDisplay[r.id];
+        }
+      }
+
+    }else{
+
+      if(!responderMarkers[r.id]){
+        responderMarkers[r.id] =
+          L.marker([r.lat,r.lng],{icon:icons.free}).addTo(map);
+      }else{
+        responderMarkers[r.id].setLatLng([r.lat,r.lng]);
+        responderMarkers[r.id].setIcon(icons.free);
+      }
     }
   }
 
-  }
-
-  // Update ETA List UI
+  // ETA PANEL
   let html = "";
   let keys = Object.keys(etaDisplay);
-  if (keys.length === 0) {
-    html = "No active dispatches";
-  } else {
-    for (let id in etaDisplay) {
-      html += `<div class="eta-row">
-                 <span class="unit-id">UNT-${id.padStart(3,'0')}</span> 
-                 <span class="time-rem">${etaDisplay[id]}</span>
-               </div>`;
-    }
+
+  if(keys.length === 0){
+    html = "No active dispatches...";
+  }else{
+    keys.forEach(id=>{
+      html += `
+      <div class="eta-row">
+        <span class="unit-id">UNT-${String(id).padStart(3,'0')}</span>
+        <span class="time-rem">${etaDisplay[id]}</span>
+      </div>`;
+    });
   }
+
   etaListEl.innerHTML = html;
 }
 </script>
